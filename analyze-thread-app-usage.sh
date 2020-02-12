@@ -53,6 +53,7 @@ function help {
                         [--trace-max-lines <max-lines>]
                         [--trace-until-package <package-name>]
                         [--trace-highlight-package <package-name>]
+                        [--only-matching-package <package-name>]
                         [--help]
                         [--version]
 
@@ -71,6 +72,7 @@ Stack trace options
     --trace-max-lines           Max lines for the stack trace (default $default_max_lines)
     --trace-until-package       Trace until a specific java package (example: net.seibertmedia)
     --trace-highlight-package   Highlight one or multiple java package s(example: net.seibertmedia|com.atlassian)
+    --only-matching-package     Only show trace with matching java package (example: net.seibertmedia)
 
 Other
 
@@ -95,6 +97,7 @@ cpu_number_of_entries=$(regex_parse_helper "${all_params}" "--number-of-cpu-entr
 max_lines=$(regex_parse_helper "${all_params}" "--trace-max-lines ([0-9]+)")
 trace_until_package=$(regex_parse_helper "${all_params}" "--trace-until-package ([^[:space:]]+)")
 trace_highlight_package=$(regex_parse_helper "${all_params}" "--trace-highlight-package ([^[:space:]]+)")
+only_matching_package=$(regex_parse_helper "${all_params}" "--only-matching-package ([^[:space:]]+)")
 help_flag=$(regex_parse_helper "${all_params}" "(--help) ")
 version_flag=$(regex_parse_helper "${all_params}" "(--version) ")
 no_interaction_flag=$(regex_parse_helper "${all_params}" "(--no-interaction) ")
@@ -168,6 +171,8 @@ echo
 IFS=$'\n'
 
 thread_number=$cpu_first_entry
+count_matches=0
+
 for line in $(printf "$cpu_line_content"); do
     trimmed_line=$(printf "$line" | sed -e 's/^ *//' | sed -e's/  */ /g')
     pid=$(printf "$trimmed_line" | cut -d " " -f 1)
@@ -176,6 +181,7 @@ for line in $(printf "$cpu_line_content"); do
     mem_usage=$(printf "$trimmed_line" | cut -d " " -f 10)
 
     echo "$thread_number. Thread $hex_pid with $cpu_usage% cpu and $mem_usage% memory usage"
+    thread_number=$(expr $thread_number + 1)
 
     if [[ -z "$trace_until_package" ]]; then
         thread_dump_entry_limit_regex="^$"
@@ -184,6 +190,15 @@ for line in $(printf "$cpu_line_content"); do
     fi
 
     thread_dump_entry="$(awk "/${hex_pid}/,/$thread_dump_entry_limit_regex/" $current_threads_file)"
+
+    if [[ -n "$only_matching_package" ]] && [[ -z "$(printf "$thread_dump_entry" | grep "$only_matching_package")" ]]; then
+        echo "No match package: '$only_matching_package'"
+        echo
+        continue;
+    fi
+    count_matches=$(expr $count_matches + 1)
+
+
 
     highlight_regex="$"
 
@@ -203,9 +218,12 @@ for line in $(printf "$cpu_line_content"); do
     echo
 
     continue_with_script "Next thread?"
-
-    thread_number=$(expr $thread_number + 1)
-
 done
+
+
+if [[ -n "$only_matching_package" ]]; then
+    echo
+    echo "Found $count_matches matches for package '$only_matching_package'"
+fi
 
 
