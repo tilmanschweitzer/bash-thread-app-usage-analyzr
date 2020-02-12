@@ -7,8 +7,8 @@ all_params="${*} "
 # ===== Constants =====
 
 default_cpu_first_entry=1
-default_cpu_number_of_entries=5
-default_max_lines=20
+default_cpu_number_of_entries=10
+default_max_lines=100
 cpu_file_prefix="app_cpu_usage."
 threads_file_prefix="app_threads."
 
@@ -51,6 +51,8 @@ function help {
                         [--first-cpu-entry <entry-number>]
                         [--number-of-cpu-entries <number>]
                         [--trace-max-lines <max-lines>]
+                        [--trace-until-package <package-name>]
+                        [--trace-highlight-package <package-name>]
                         [--help]
                         [--version]
 
@@ -67,6 +69,8 @@ Specify entry in cpu usage file
 Stack trace options
 
     --trace-max-lines           Max lines for the stack trace (default $default_max_lines)
+    --trace-until-package       Trace until a specific java package (example: net.seibertmedia)
+    --trace-highlight-package   Highlight one or multiple java package s(example: net.seibertmedia|com.atlassian)
 
 Other
 
@@ -89,6 +93,8 @@ file_number=$(regex_parse_helper "${all_params}" "--file-number ([0-9]+)")
 cpu_first_entry=$(regex_parse_helper "${all_params}" "--first-cpu-entry ([0-9]+)")
 cpu_number_of_entries=$(regex_parse_helper "${all_params}" "--number-of-cpu-entries ([0-9]+)")
 max_lines=$(regex_parse_helper "${all_params}" "--trace-max-lines ([0-9]+)")
+trace_until_package=$(regex_parse_helper "${all_params}" "--trace-until-package ([^[:space:]]+)")
+trace_highlight_package=$(regex_parse_helper "${all_params}" "--trace-highlight-package ([^[:space:]]+)")
 help_flag=$(regex_parse_helper "${all_params}" "(--help) ")
 version_flag=$(regex_parse_helper "${all_params}" "(--version) ")
 no_interaction_flag=$(regex_parse_helper "${all_params}" "(--no-interaction) ")
@@ -169,9 +175,27 @@ for line in $(printf "$cpu_line_content"); do
     cpu_usage=$(printf "$trimmed_line" | cut -d " " -f 9)
     mem_usage=$(printf "$trimmed_line" | cut -d " " -f 10)
 
-    echo "$thread_number Thread $hex_pid with $cpu_usage% cpu and $mem_usage% memory usage"
-    thread_dump_entry="$(awk "/${hex_pid}/,/^$/" $current_threads_file)"
-    printf "${thread_dump_entry}\n" | head -n $max_lines
+    echo "$thread_number. Thread $hex_pid with $cpu_usage% cpu and $mem_usage% memory usage"
+
+    if [[ -z "$trace_until_package" ]]; then
+        thread_dump_entry_limit_regex="^$"
+    else
+        thread_dump_entry_limit_regex="(^$|$trace_until_package)"
+    fi
+
+    thread_dump_entry="$(awk "/${hex_pid}/,/$thread_dump_entry_limit_regex/" $current_threads_file)"
+
+    highlight_regex="$"
+
+    if [[ -n "$trace_highlight_package" ]]; then
+        highlight_regex="$trace_highlight_package|$highlight_regex"
+    fi
+
+    if [[ -n "$trace_until_package" ]]; then
+        highlight_regex="$trace_until_package|$highlight_regex"
+    fi
+
+    printf "${thread_dump_entry}\n" | head -n $max_lines | grep --color=always -E "${highlight_regex}"
 
     if [[ -z "$no_interaction_flag" ]]; then
          printf "${thread_dump_entry}\n" | less --quit-if-one-screen
