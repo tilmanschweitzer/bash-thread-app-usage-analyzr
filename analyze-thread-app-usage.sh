@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 
-folder=$1
-file_number=$2
-cpu_first_entry=$3
-cpu_number_of_entries=$4
-cpu_file_prefix="app_cpu_usage."
-threads_file_prefix="app_threads."
+
+
+# ===== Functions =====
 
 function continue_with_script {
     message=$1
@@ -18,6 +15,21 @@ function continue_with_script {
         esac
     done
 }
+
+
+
+# ===== Parse parameters =====
+
+folder=$1
+file_number=$2
+cpu_first_entry=$3
+cpu_number_of_entries=$4
+cpu_file_prefix="app_cpu_usage."
+threads_file_prefix="app_threads."
+
+
+
+# ===== Parameter checks =====
 
 if [[ ! -d $folder ]]; then
     echo "ERROR: Folder '$folder' not found"
@@ -58,12 +70,18 @@ cpu_line=$(expr 6 + $cpu_first_entry + $cpu_number_of_entries)
 cpu_line_content="$(head -n $cpu_line $current_cpu_file | tail -n $cpu_number_of_entries)"
 
 
+
+# ===== Print parameter information =====
+
 echo
 echo "Analyse $current_cpu_file and $current_threads_file"
 echo
 printf "$cpu_line_content" | grep -n '^'
 echo
 echo
+
+
+# ===== Process cpu usage information and find matching threads =====
 
 IFS=$'\n'
 
