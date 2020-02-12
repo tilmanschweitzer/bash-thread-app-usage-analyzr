@@ -7,7 +7,8 @@ all_params="${*} "
 # ===== Constants =====
 
 default_cpu_first_entry=1
-default_cpu_number_of_entries=5;
+default_cpu_number_of_entries=5
+default_max_lines=20
 cpu_file_prefix="app_cpu_usage."
 threads_file_prefix="app_threads."
 
@@ -49,6 +50,7 @@ function help {
     echo "usage: $0 --folder <path> --file-number=<file-number>
                         [--first-cpu-entry <entry-number>]
                         [--number-of-cpu-entries <number>]
+                        [--trace-max-lines <max-lines>]
                         [--help]
                         [--version]
 
@@ -61,6 +63,10 @@ Specify entry in cpu usage file
 
     --first-cpu-entry           Number of the first used entry for the report (default: $default_cpu_first_entry)
     --number-of-cpu-entries     Number of entries analyzed (default $default_cpu_number_of_entries)
+
+Stack trace options
+
+    --trace-max-lines           Max lines for the stack trace (default $default_max_lines)
 
 Other
 
@@ -82,6 +88,7 @@ folder=$(regex_parse_helper "${all_params}" "--folder ([^[:space:]]+)")
 file_number=$(regex_parse_helper "${all_params}" "--file-number ([0-9]+)")
 cpu_first_entry=$(regex_parse_helper "${all_params}" "--first-cpu-entry ([0-9]+)")
 cpu_number_of_entries=$(regex_parse_helper "${all_params}" "--number-of-cpu-entries ([0-9]+)")
+max_lines=$(regex_parse_helper "${all_params}" "--trace-max-lines ([0-9]+)")
 help_flag=$(regex_parse_helper "${all_params}" "(--help) ")
 version_flag=$(regex_parse_helper "${all_params}" "(--version) ")
 no_interaction_flag=$(regex_parse_helper "${all_params}" "(--no-interaction) ")
@@ -123,7 +130,11 @@ fi
 if [[ ! "$cpu_number_of_entries" =~ ^[0-9]+$ ]]; then
     cpu_number_of_entries=$default_cpu_number_of_entries;
     echo "INFO: Parameter --number-of-cpu-entries missing. The script proceeds with the default value: $default_cpu_number_of_entries"
+fi
 
+if [[ ! "$max_lines" =~ ^[0-9]+$ ]]; then
+    max_lines=$default_max_lines;
+    echo "INFO: Parameter --trace-max-lines missing. The script proceeds with the default value: $default_max_lines"
 fi
 
 timestamp=$(ls ${cpu_file_prefix}* | head -n 1 | sed s/-01.txt// | sed s/${cpu_file_prefix}//)
@@ -160,7 +171,7 @@ for line in $(printf "$cpu_line_content"); do
 
     echo "$thread_number Thread $hex_pid with $cpu_usage% cpu and $mem_usage% memory usage"
     thread_dump_entry="$(awk "/${hex_pid}/,/^$/" $current_threads_file)"
-    printf "${thread_dump_entry}\n" | head -n 10
+    printf "${thread_dump_entry}\n" | head -n $max_lines
 
     if [[ -z "$no_interaction_flag" ]]; then
          printf "${thread_dump_entry}\n" | less --quit-if-one-screen
