@@ -14,6 +14,10 @@ threads_file_prefix="app_threads."
 # ===== Functions =====
 
 function continue_with_script {
+    if [[ -n $no_interaction_flag ]]; then
+        return;
+    fi
+
     message=$1
     while true; do
         read -p "$message (y/n) " yn
@@ -58,6 +62,10 @@ Specify entry in cpu usage file
     --first-cpu-entry           Number of the first used entry for the report (default: $default_cpu_first_entry)
     --number-of-cpu-entries     Number of entries analyzed (default $default_cpu_number_of_entries)
 
+Other
+
+    --no-interaction            Skip confirmation questions and less
+
 Version
     --version                   Show only the script version
 
@@ -76,6 +84,7 @@ cpu_first_entry=$(regex_parse_helper "${all_params}" "--first-cpu-entry ([0-9]+)
 cpu_number_of_entries=$(regex_parse_helper "${all_params}" "--number-of-cpu-entries ([0-9]+)")
 help_flag=$(regex_parse_helper "${all_params}" "(--help) ")
 version_flag=$(regex_parse_helper "${all_params}" "(--version) ")
+no_interaction_flag=$(regex_parse_helper "${all_params}" "(--no-interaction) ")
 
 
 # ===== Parameter checks =====
@@ -152,7 +161,10 @@ for line in $(printf "$cpu_line_content"); do
     echo "$thread_number Thread $hex_pid with $cpu_usage% cpu and $mem_usage% memory usage"
     thread_dump_entry="$(awk "/${hex_pid}/,/^$/" $current_threads_file)"
     printf "${thread_dump_entry}\n" | head -n 10
-    printf "${thread_dump_entry}\n" | less --quit-if-one-screen
+
+    if [[ -z "$no_interaction_flag" ]]; then
+         printf "${thread_dump_entry}\n" | less --quit-if-one-screen
+    fi
     echo
 
     continue_with_script "Next thread?"
