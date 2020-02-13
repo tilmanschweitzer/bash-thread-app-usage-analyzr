@@ -50,6 +50,7 @@ function help {
     echo "usage: $0 --folder <path> --file-number=<file-number>
                         [--first-cpu-entry <entry-number>]
                         [--number-of-cpu-entries <number>]
+                        [--cpu-threshold <cpu-usage-percent>]
                         [--trace-max-lines <max-lines>]
                         [--trace-until-package <package-name>]
                         [--trace-highlight-package <package-name>]
@@ -66,6 +67,7 @@ Specify entry in cpu usage file
 
     --first-cpu-entry           Number of the first used entry for the report (default: $default_cpu_first_entry)
     --number-of-cpu-entries     Number of entries analyzed (default $default_cpu_number_of_entries)
+    --cpu-threshold             Threshold for the entries
 
 Stack trace options
 
@@ -94,6 +96,7 @@ folder=$(regex_parse_helper "${all_params}" "--folder ([^[:space:]]+)")
 file_number=$(regex_parse_helper "${all_params}" "--file-number ([0-9]+)")
 cpu_first_entry=$(regex_parse_helper "${all_params}" "--first-cpu-entry ([0-9]+)")
 cpu_number_of_entries=$(regex_parse_helper "${all_params}" "--number-of-cpu-entries ([0-9]+)")
+cpu_usage_threshold=$(regex_parse_helper "${all_params}" "--cpu-threshold ([0-9]+)")
 max_lines=$(regex_parse_helper "${all_params}" "--trace-max-lines ([0-9]+)")
 trace_until_package=$(regex_parse_helper "${all_params}" "--trace-until-package ([^[:space:]]+)")
 trace_highlight_package=$(regex_parse_helper "${all_params}" "--trace-highlight-package ([^[:space:]]+)")
@@ -179,6 +182,11 @@ for line in $(printf "$cpu_line_content"); do
     hex_pid=$(printf "%#x" $pid)
     cpu_usage=$(printf "$trimmed_line" | cut -d " " -f 9)
     mem_usage=$(printf "$trimmed_line" | cut -d " " -f 10)
+
+
+    if [[ -n "$cpu_usage_threshold" ]] && [[ $(echo "$cpu_usage" | cut -d "." -f 1) -lt "$cpu_usage_threshold" ]]; then
+        break;
+    fi
 
     echo "$thread_number. Thread $hex_pid with $cpu_usage% cpu and $mem_usage% memory usage"
     thread_number=$(expr $thread_number + 1)
