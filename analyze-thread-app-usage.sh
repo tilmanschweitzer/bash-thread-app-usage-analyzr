@@ -62,6 +62,9 @@ function help {
 Required parameters
 
     --folder                    Folder containing the thread dumps and cpu usage information
+
+Specify a file
+
     --file-number               Number of the file in the folder
 
 Specify entry in cpu usage file
@@ -129,14 +132,6 @@ fi
 
 cd $folder
 
-if [[ ! "$file_number" =~ ^[0-9]+$ ]]; then
-    echo "ERROR: Parameter --file-number is invalid: '$file_number'"
-    printf "Available file numbers: "
-    ls $threads_file_prefix* | rev | cut -d "-" -f 1 | rev | sed s/.txt// | sed -e 's/^0*//' | xargs printf "%d "
-    echo "Use --help for further documentation"
-    exit;
-fi
-
 if [[ ! "$cpu_first_entry" =~ ^[0-9]+$ ]]; then
     cpu_first_entry=$default_cpu_first_entry;
     echo "INFO: Parameter --first-cpu-entry missing. The script proceeds with the default value: $default_cpu_first_entry"
@@ -152,91 +147,134 @@ if [[ ! "$max_lines" =~ ^[0-9]+$ ]]; then
     echo "INFO: Parameter --trace-max-lines missing. The script proceeds with the default value: $default_max_lines"
 fi
 
-timestamp=$(ls ${cpu_file_prefix}* | head -n 1 | sed s/-01.txt// | sed s/${cpu_file_prefix}//)
 
-current_cpu_file="${cpu_file_prefix}${timestamp}-$(printf "%02d" $file_number).txt"
-current_threads_file="${threads_file_prefix}${timestamp}-$(printf "%02d" $file_number).txt"
+# ===== Analyse function =====
 
-cpu_line=$(expr 6 + $cpu_first_entry + $cpu_number_of_entries)
-cpu_line_content="$(head -n $cpu_line $current_cpu_file | tail -n $cpu_number_of_entries)"
+global_thread_counter=1
+
+function analyse_file_with_name {
+    current_cpu_file=$1
+    current_threads_file=$2
 
 
 
-# ===== Print parameter information =====
+    cpu_line=$(expr 6 + $cpu_first_entry + $cpu_number_of_entries)
+    cpu_line_content="$(head -n $cpu_line $current_cpu_file | tail -n $cpu_number_of_entries)"
 
-echo
-echo "Analyse $current_cpu_file and $current_threads_file"
-echo
-if [[ -n "$no_usage_table_flag" ]]; then
-    printf "$cpu_line_content" | grep -n '^'
+
+
+    # ===== Print parameter information =====
+
     echo
+    echo "Analyse $current_cpu_file and $current_threads_file"
     echo
-fi
-
-
-# ===== Process cpu usage information and find matching threads =====
-
-IFS=$'\n'
-
-thread_number=$cpu_first_entry
-count_matches=0
-
-for line in $(printf "$cpu_line_content"); do
-    trimmed_line=$(printf "$line" | sed -e 's/^ *//' | sed -e's/  */ /g')
-    pid=$(printf "$trimmed_line" | cut -d " " -f 1)
-    hex_pid=$(printf "%#x" $pid)
-    cpu_usage=$(printf "$trimmed_line" | cut -d " " -f 9)
-    mem_usage=$(printf "$trimmed_line" | cut -d " " -f 10)
-
-
-    if [[ -n "$cpu_usage_threshold" ]] && [[ $(echo "$cpu_usage" | cut -d "." -f 1) -lt "$cpu_usage_threshold" ]]; then
-        break;
-    fi
-
-    echo "$thread_number. Thread $hex_pid with $cpu_usage% cpu and $mem_usage% memory usage"
-    thread_number=$(expr $thread_number + 1)
-
-    if [[ -z "$trace_until_package" ]]; then
-        thread_dump_entry_limit_regex="^$"
-    else
-        thread_dump_entry_limit_regex="(^$|$trace_until_package)"
-    fi
-
-    thread_dump_entry="$(awk "/${hex_pid}/,/$thread_dump_entry_limit_regex/" $current_threads_file)"
-
-    if [[ -n "$only_matching_package" ]] && [[ -z "$(printf "$thread_dump_entry" | grep "$only_matching_package")" ]]; then
-        echo "No match package: '$only_matching_package'"
+    if [[ -n "$no_usage_table_flag" ]]; then
+        printf "$cpu_line_content" | grep -n '^'
         echo
-        continue;
-    fi
-    count_matches=$(expr $count_matches + 1)
-
-
-
-    highlight_regex="$"
-
-    if [[ -n "$trace_highlight_package" ]]; then
-        highlight_regex="$trace_highlight_package|$highlight_regex"
+        echo
     fi
 
-    if [[ -n "$trace_until_package" ]]; then
-        highlight_regex="$trace_until_package|$highlight_regex"
+
+    # ===== Process cpu usage information and find matching threads =====
+
+    IFS=$'\n'
+
+    thread_number=$cpu_first_entry
+    count_matches=0
+
+    for line in $(printf "$cpu_line_content"); do
+        trimmed_line=$(printf "$line" | sed -e 's/^ *//' | sed -e's/  */ /g')
+        pid=$(printf "$trimmed_line" | cut -d " " -f 1)
+        hex_pid=$(printf "%#x" $pid)
+        cpu_usage=$(printf "$trimmed_line" | cut -d " " -f 9)
+        mem_usage=$(printf "$trimmed_line" | cut -d " " -f 10)
+
+
+        if [[ -n "$cpu_usage_threshold" ]] && [[ $(echo "$cpu_usage" | cut -d "." -f 1) -lt "$cpu_usage_threshold" ]]; then
+            break;
+        fi
+
+        if [[ -n "$file_number" ]]; then
+            display_thread_number=$thread_number
+        else
+            display_thread_number=$global_thread_counter
+            global_thread_counter=$(expr 1 + $global_thread_counter)
+        fi
+
+        echo "${display_thread_number}. Thread $hex_pid with $cpu_usage% cpu and $mem_usage% memory usage"
+        thread_number=$(expr $thread_number + 1)
+
+        if [[ -z "$trace_until_package" ]]; then
+            thread_dump_entry_limit_regex="^$"
+        else
+            thread_dump_entry_limit_regex="(^$|$trace_until_package)"
+        fi
+
+        thread_dump_entry="$(awk "/${hex_pid}/,/$thread_dump_entry_limit_regex/" $current_threads_file)"
+
+        if [[ -n "$only_matching_package" ]] && [[ -z "$(printf "$thread_dump_entry" | grep "$only_matching_package")" ]]; then
+            echo "No match package: '$only_matching_package'"
+            echo
+            continue;
+        fi
+        count_matches=$(expr $count_matches + 1)
+
+
+
+        highlight_regex="$"
+
+        if [[ -n "$trace_highlight_package" ]]; then
+            highlight_regex="$trace_highlight_package|$highlight_regex"
+        fi
+
+        if [[ -n "$trace_until_package" ]]; then
+            highlight_regex="$trace_until_package|$highlight_regex"
+        fi
+
+        printf "${thread_dump_entry}\n" | head -n $max_lines | grep --color=always -E "${highlight_regex}"
+
+        if [[ -z "$no_interaction_flag" ]]; then
+             printf "${thread_dump_entry}\n" | less --quit-if-one-screen
+        fi
+        echo
+
+        continue_with_script "Next thread?"
+    done
+
+
+    if [[ -n "$only_matching_package" ]]; then
+        echo
+        echo "Found $count_matches matches for package '$only_matching_package'"
     fi
 
-    printf "${thread_dump_entry}\n" | head -n $max_lines | grep --color=always -E "${highlight_regex}"
+}
 
-    if [[ -z "$no_interaction_flag" ]]; then
-         printf "${thread_dump_entry}\n" | less --quit-if-one-screen
+
+# ===== Run with given file number =====
+if [[ -n "$file_number" ]]; then
+    if [[ ! "$file_number" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: Parameter --file-number is invalid: '$file_number'"
+        printf "Available file numbers: "
+        ls $threads_file_prefix* | rev | cut -d "-" -f 1 | rev | sed s/.txt// | sed -e 's/^0*//' | xargs printf "%d "
+        echo "Use --help for further documentation"
+        exit;
     fi
-    echo
 
-    continue_with_script "Next thread?"
-done
+    timestamp=$(ls ${cpu_file_prefix}* | head -n 1 | sed s/-01.txt// | sed s/${cpu_file_prefix}//)
 
+    current_cpu_file="${cpu_file_prefix}${timestamp}-$(printf "%02d" $file_number).txt"
+    current_threads_file="${threads_file_prefix}${timestamp}-$(printf "%02d" $file_number).txt"
 
-if [[ -n "$only_matching_package" ]]; then
-    echo
-    echo "Found $count_matches matches for package '$only_matching_package'"
+    analyse_file_with_name "$current_cpu_file" "$current_threads_file"
+
+    exit
 fi
+for suffix in $(ls $cpu_file_prefix* | sed "s/$cpu_file_prefix//"); do
 
+    current_cpu_file="${cpu_file_prefix}${suffix}"
+    current_threads_file="${threads_file_prefix}${suffix}"
 
+    analyse_file_with_name "$current_cpu_file" "$current_threads_file"
+
+    echo "===================="
+done
