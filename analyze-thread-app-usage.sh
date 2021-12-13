@@ -47,7 +47,9 @@ function regex_parse_helper {
 }
 
 function help {
-    echo "usage: $0 --folder <path> --file-number=<file-number>
+    echo "usage: $0 --folder <path>
+                        [--file-number=<file-number>]
+                        [--file-suffix=<file-suffix>]
                         [--first-cpu-entry <entry-number>]
                         [--number-of-cpu-entries <number>]
                         [--cpu-threshold <cpu-usage-percent>]
@@ -66,6 +68,7 @@ Required parameters
 Specify a file
 
     --file-number               Number of the file in the folder
+    --file-suffix               Suffix of the file in the folder (example: 2020-02-27--12-20-02-1)
 
 Specify entry in cpu usage file
 
@@ -99,6 +102,7 @@ Current Version: $version
 
 folder=$(regex_parse_helper "${all_params}" "--folder ([^[:space:]]+)")
 file_number=$(regex_parse_helper "${all_params}" "--file-number ([0-9]+)")
+file_suffix=$(regex_parse_helper "${all_params}" "--file-suffix ([^[:space:]]+)")
 cpu_first_entry=$(regex_parse_helper "${all_params}" "--first-cpu-entry ([0-9]+)")
 cpu_number_of_entries=$(regex_parse_helper "${all_params}" "--number-of-cpu-entries ([0-9]+)")
 cpu_usage_threshold=$(regex_parse_helper "${all_params}" "--cpu-threshold ([0-9]+)")
@@ -194,7 +198,7 @@ function analyse_file_with_name {
             break;
         fi
 
-        if [[ -n "$file_number" ]]; then
+        if [[ -n "$file_number" ]] || [[ -n "$file_suffix" ]]; then
             display_thread_number=$thread_number
         else
             display_thread_number=$global_thread_counter
@@ -269,6 +273,17 @@ if [[ -n "$file_number" ]]; then
 
     exit
 fi
+
+if [[ -n "$file_suffix" ]]; then
+    current_cpu_file="${cpu_file_prefix}${file_suffix}.txt"
+    current_threads_file="${threads_file_prefix}${file_suffix}.txt"
+    analyse_file_with_name "$current_cpu_file" "$current_threads_file"
+    exit
+fi
+
+# ===== Run with given file suffix =====
+
+
 for suffix in $(ls $cpu_file_prefix* | sed "s/$cpu_file_prefix//"); do
 
     current_cpu_file="${cpu_file_prefix}${suffix}"
